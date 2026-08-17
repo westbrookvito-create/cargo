@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --color-bg: #0a0c12;
+  --color-bg-elevated: #12141d;
+  --color-surface: #171a26;
+  --color-surface-2: #1e2230;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-soft: rgba(255, 255, 255, 0.05);
+
+  --color-text: #f5f6f9;
+  --color-text-secondary: #9aa3b5;
+  --color-text-tertiary: #62697b;
+
+  --color-accent: #ff7a29;
+  --color-accent-2: #ffb238;
+  --color-accent-soft: rgba(255, 122, 41, 0.14);
+
+  --color-success: #32d996;
+  --color-success-soft: rgba(50, 217, 150, 0.14);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgba(251, 191, 36, 0.14);
+  --color-danger: #fb6a6a;
+  --color-danger-soft: rgba(251, 106, 106, 0.14);
+  --color-info: #5aa9ff;
+  --color-info-soft: rgba(90, 169, 255, 0.14);
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px -8px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 0 1px rgba(255,122,41,0.25), 0 8px 30px -6px rgba(255,122,41,0.35);
+}
+
+:root[data-theme="light"] {
+  --color-bg: #f4f5f8;
+  --color-bg-elevated: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0f1f5;
+  --color-border: rgba(15, 18, 30, 0.08);
+  --color-border-soft: rgba(15, 18, 30, 0.05);
+
+  --color-text: #14161f;
+  --color-text-secondary: #5b6274;
+  --color-text-tertiary: #949cad;
+
+  --shadow-card: 0 1px 2px rgba(20,22,31,0.04), 0 8px 24px -10px rgba(20,22,31,0.12);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  max-width: 560px;
+  margin: 0 auto;
+  position: relative;
+  min-height: 100%;
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.brand-gradient-text {
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-gradient-bg {
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-surface) 25%, var(--color-surface-2) 37%, var(--color-surface) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: fade-in-up 0.35s ease both;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) 0%,
+    var(--color-accent) var(--range-progress, 50%),
+    var(--color-surface-2) var(--range-progress, 50%),
+    var(--color-surface-2) 100%
+  );
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  border: 3px solid var(--color-accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  border: 3px solid var(--color-accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-accent);
+}

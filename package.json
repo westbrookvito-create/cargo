@@ -1,0 +1,14 @@
+{
+  "name": "crispycargo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "CrispyCargo — Telegram Mini App для карго-доставки из Китая",
+  "scripts": {
+    "dev:webapp": "npm --prefix apps/webapp run dev",
+    "dev:server": "npm --prefix apps/server run dev",
+    "build:webapp": "npm --prefix apps/webapp run build",
+    "build:server": "npm --prefix apps/server run build",
+    "install:all": "npm --prefix apps/webapp install && npm --prefix apps/server install"
+  },
+  "license": "UNLICENSED"
+}
