@@ -22,6 +22,21 @@ bot.catch((err, ctx) => {
   console.error(`Error while handling update ${ctx.updateType}:`, err);
 });
 
+async function applyBranding() {
+  try {
+    await bot.telegram.setMyName(config.botDisplayName);
+    await bot.telegram.setMyShortDescription(`Трекер подписчиков для арбитража трафика. По вопросам: ${config.guestContact}`);
+    await bot.telegram.setMyDescription(
+      `${config.botDisplayName} отслеживает подписчиков в ваших Telegram-каналах и считает оплату за трафик. ` +
+        `Доступ только у владельцев проектов.`
+    );
+  } catch (err) {
+    console.error('Failed to set bot profile name/description:', err.message);
+  }
+}
+
+applyBranding();
+
 bot.launch({
   allowedUpdates: ['message', 'callback_query', 'my_chat_member', 'chat_member'],
 });

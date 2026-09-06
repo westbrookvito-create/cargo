@@ -43,6 +43,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_subs_link ON subscribers(invite_link_id);
 `);
 
+const projectColumns = db.prepare('PRAGMA table_info(projects)').all().map((c) => c.name);
+if (!projectColumns.includes('owner_user_id')) {
+  db.exec('ALTER TABLE projects ADD COLUMN owner_user_id TEXT');
+}
+if (!projectColumns.includes('owner_username')) {
+  db.exec('ALTER TABLE projects ADD COLUMN owner_username TEXT');
+}
+
 function upsertProjectFromChat(channelId, title) {
   const existing = db.prepare('SELECT * FROM projects WHERE channel_id = ?').get(channelId);
   if (existing) {
@@ -74,6 +82,35 @@ function setCurrency(channelId, currency) {
 
 function setHoldDays(channelId, days) {
   db.prepare('UPDATE projects SET hold_days = ? WHERE channel_id = ?').run(days, channelId);
+}
+
+function setProjectOwnerId(channelId, userId) {
+  db.prepare('UPDATE projects SET owner_user_id = ?, owner_username = NULL WHERE channel_id = ?').run(
+    String(userId),
+    channelId
+  );
+}
+
+function setProjectOwnerUsername(channelId, username) {
+  db.prepare('UPDATE projects SET owner_username = ?, owner_user_id = NULL WHERE channel_id = ?').run(
+    username.toLowerCase(),
+    channelId
+  );
+}
+
+function clearProjectOwner(channelId) {
+  db.prepare('UPDATE projects SET owner_user_id = NULL, owner_username = NULL WHERE channel_id = ?').run(channelId);
+}
+
+function getProjectsByOwnerUserId(userId) {
+  return db.prepare('SELECT * FROM projects WHERE owner_user_id = ?').all(String(userId));
+}
+
+function bindOwnerByUsername(userId, username) {
+  if (!username) return;
+  db.prepare(
+    'UPDATE projects SET owner_user_id = ? WHERE owner_username = ? AND owner_user_id IS NULL'
+  ).run(String(userId), username.toLowerCase());
 }
 
 function removeProject(channelId) {
@@ -297,4 +334,9 @@ module.exports = {
   exportRows,
   getAllProjectsPeriodStats,
   exportAllRows,
+  setProjectOwnerId,
+  setProjectOwnerUsername,
+  clearProjectOwner,
+  getProjectsByOwnerUserId,
+  bindOwnerByUsername,
 };

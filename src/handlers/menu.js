@@ -1,9 +1,12 @@
 const { Markup } = require('telegraf');
 const db = require('../db');
-const { ownerOnly } = require('../auth');
+const config = require('../config');
+const { isOwner, ownerOnly, resolveAccess, canViewProject } = require('../auth');
 const { setPending, takePending } = require('../state');
 const { buildCsv, buildAllCsv } = require('../services/csv');
 const { getPeriod, listPeriods } = require('../services/periods');
+
+const GUEST_MESSAGE = `Привлечение трафика: ${config.guestContact}`;
 
 function money(amount, currency) {
   return `${Number(amount).toFixed(2)} ${currency}`;
@@ -46,6 +49,7 @@ function projectKeyboard(channelId) {
     [Markup.button.callback('💰 Цена за подписчика', `setprice:${channelId}`)],
     [Markup.button.callback('💱 Валюта', `setcur:${channelId}`)],
     [Markup.button.callback('⏳ Срок удержания (дни)', `sethold:${channelId}`)],
+    [Markup.button.callback('👤 Владелец проекта', `setowner:${channelId}`)],
     [Markup.button.callback('⬇️ Экспорт CSV', `export:${channelId}`)],
     [Markup.button.callback('« Назад к проектам', 'back')],
   ]);
@@ -76,12 +80,19 @@ async function showProjectsList(ctx) {
   return ctx.reply('Ваши проекты:', kb);
 }
 
+function ownerLabel(project) {
+  if (project.owner_user_id) return `ID ${project.owner_user_id}`;
+  if (project.owner_username) return `@${project.owner_username} (ждём, пока он напишет боту)`;
+  return 'не назначен';
+}
+
 function projectSummaryText(project) {
   return (
     `📁 ${project.title}\n` +
     `ID: ${project.channel_id}\n` +
     `Цена за подтверждённого подписчика: ${money(project.price_per_sub, project.currency)}\n` +
-    `Срок удержания: ${project.hold_days} дн.`
+    `Срок удержания: ${project.hold_days} дн.\n` +
+    `Владелец проекта: ${ownerLabel(project)}`
   );
 }
 
@@ -102,6 +113,24 @@ async function showPeriodMenu(ctx, channelId) {
   await ctx.answerCbQuery();
 }
 
+function renderPeriodStatsText(project, period, sources, totals) {
+  let text = `📊 ${project.title} — ${period.label}\n\n`;
+  if (sources.length === 0) {
+    text += 'Нет данных за этот период.';
+    return text;
+  }
+  for (const s of sources) {
+    text +=
+      `• ${s.label}\n` +
+      `  новых: ${s.newSubs} | подтверждено: ${s.confirmed} | отписалось рано: ${s.leftEarly}\n` +
+      `  заработано: ${money(s.earnings, project.currency)}\n`;
+  }
+  text +=
+    `\nИТОГО за «${period.label}»: новых ${totals.newSubs}, подтверждено ${totals.confirmed}, отписалось рано ${totals.leftEarly}\n` +
+    `💰 Заработано: ${money(totals.earnings, project.currency)}`;
+  return text;
+}
+
 async function showPeriodStats(ctx, channelId, periodKey) {
   const period = getPeriod(periodKey);
   if (!period) return ctx.answerCbQuery('Неизвестный период');
@@ -110,23 +139,8 @@ async function showPeriodStats(ctx, channelId, periodKey) {
   if (!stats) return ctx.answerCbQuery('Проект не найден');
   const { project, sources, totals } = stats;
 
-  let text = `📊 ${project.title} — ${period.label}\n\n`;
-  if (sources.length === 0) {
-    text += 'Нет данных за этот период.';
-  } else {
-    for (const s of sources) {
-      text +=
-        `• ${s.label}\n` +
-        `  новых: ${s.newSubs} | подтверждено: ${s.confirmed} | отписалось рано: ${s.leftEarly}\n` +
-        `  заработано: ${money(s.earnings, project.currency)}\n`;
-    }
-    text +=
-      `\nИТОГО за «${period.label}»: новых ${totals.newSubs}, подтверждено ${totals.confirmed}, отписалось рано ${totals.leftEarly}\n` +
-      `💰 Заработано: ${money(totals.earnings, project.currency)}`;
-  }
-
   await ctx.reply(
-    text,
+    renderPeriodStatsText(project, period, sources, totals),
     Markup.inlineKeyboard([
       [Markup.button.callback('« Другой период', `periods:${channelId}`)],
       [Markup.button.callback('« К проекту', `proj:${channelId}`)],
@@ -230,6 +244,55 @@ async function createTrackingLink(ctx, channelId, label) {
   }
 }
 
+function myPeriodKeyboard(channelId, showBackToList) {
+  const periods = listPeriods();
+  const rows = [];
+  for (let i = 0; i < periods.length; i += 2) {
+    rows.push(periods.slice(i, i + 2).map((p) => Markup.button.callback(p.label, `mystats:${channelId}:${p.key}`)));
+  }
+  if (showBackToList) rows.push([Markup.button.callback('« Мои проекты', 'myprojects')]);
+  return Markup.inlineKeyboard(rows);
+}
+
+async function showMyProjects(ctx, projects) {
+  if (projects.length === 1) return showMyPeriodMenu(ctx, projects[0].channel_id, false);
+  const kb = Markup.inlineKeyboard(projects.map((p) => [Markup.button.callback(p.title, `myproj:${p.channel_id}`)]));
+  await ctx.reply('Ваши проекты:', kb);
+}
+
+async function showMyPeriodMenu(ctx, channelId, showBackToList) {
+  if (!canViewProject(ctx, channelId)) return ctx.answerCbQuery ? ctx.answerCbQuery('Нет доступа') : undefined;
+  const project = db.getProject(channelId);
+  if (!project) return ctx.answerCbQuery ? ctx.answerCbQuery('Проект не найден') : undefined;
+  const text = `📊 ${project.title}\nВыберите период:`;
+  const kb = myPeriodKeyboard(channelId, showBackToList);
+  if (ctx.updateType === 'callback_query') {
+    await ctx.editMessageText(text, kb).catch(() => ctx.reply(text, kb));
+    await ctx.answerCbQuery();
+  } else {
+    await ctx.reply(text, kb);
+  }
+}
+
+async function showMyPeriodStats(ctx, channelId, periodKey) {
+  if (!canViewProject(ctx, channelId)) return ctx.answerCbQuery('Нет доступа');
+  const period = getPeriod(periodKey);
+  if (!period) return ctx.answerCbQuery('Неизвестный период');
+  const [from, to] = period.range();
+  const stats = db.getPeriodStats(channelId, from, to);
+  if (!stats) return ctx.answerCbQuery('Проект не найден');
+  const { project, sources, totals } = stats;
+  const owned = db.getProjectsByOwnerUserId(ctx.from.id);
+
+  await ctx.reply(
+    renderPeriodStatsText(project, period, sources, totals),
+    Markup.inlineKeyboard([[Markup.button.callback('« Другой период', `myproj:${channelId}`)]].concat(
+      owned.length > 1 ? [[Markup.button.callback('« Мои проекты', 'myprojects')]] : []
+    ))
+  );
+  await ctx.answerCbQuery();
+}
+
 async function exportCsv(ctx, channelId) {
   const project = db.getProject(channelId);
   if (!project) return ctx.answerCbQuery('Проект не найден');
@@ -243,28 +306,46 @@ async function exportCsv(ctx, channelId) {
   await ctx.answerCbQuery();
 }
 
+const ADMIN_INTRO =
+  `🐺 ${config.botDisplayName}\n\n` +
+  'Бот отслеживает подписчиков в ваших каналах и считает оплату по фиксированной цене за подписчика.\n\n' +
+  '1. Добавьте бота администратором в канал (с правом приглашать по ссылке).\n' +
+  '2. Проект появится в /projects — задайте там цену и срок удержания.\n' +
+  '3. Создавайте отдельную трек-ссылку под каждый рекламный источник — статистика будет по каждой ссылке отдельно.\n' +
+  '4. В карточке проекта кнопкой «Владелец проекта» можно назначить, кто из ваших партнёров видит статистику по этому каналу.';
+
+const ADMIN_HELP =
+  'Команды:\n' +
+  '/projects — список проектов (каналов)\n\n' +
+  'Статусы подписчика:\n' +
+  '• в ожидании — подписался недавно, ещё не прошёл срок удержания\n' +
+  '• подтверждено — досидел до конца срока удержания, считается к оплате\n' +
+  '• отписался рано — вышел из канала до истечения срока удержания, не оплачивается';
+
 module.exports = (bot) => {
-  bot.command('start', ownerOnly(), (ctx) =>
-    ctx.reply(
-      'Бот отслеживает подписчиков в ваших каналах и считает оплату по фиксированной цене за подписчика.\n\n' +
-        '1. Добавьте бота администратором в канал (с правом приглашать по ссылке).\n' +
-        '2. Проект появится в /projects — задайте там цену и срок удержания.\n' +
-        '3. Создавайте отдельную трек-ссылку под каждый рекламный источник — статистика будет по каждой ссылке отдельно.'
-    )
-  );
+  bot.command('start', (ctx) => {
+    if (ctx.chat.type !== 'private') return;
+    const access = resolveAccess(ctx);
+    if (access.role === 'owner') return ctx.reply(ADMIN_INTRO);
+    if (access.role === 'projectOwner') return showMyProjects(ctx, access.projects);
+    return ctx.reply(GUEST_MESSAGE);
+  });
 
-  bot.command('help', ownerOnly(), (ctx) =>
-    ctx.reply(
-      'Команды:\n' +
-        '/projects — список проектов (каналов)\n\n' +
-        'Статусы подписчика:\n' +
-        '• в ожидании — подписался недавно, ещё не прошёл срок удержания\n' +
-        '• подтверждено — досидел до конца срока удержания, считается к оплате\n' +
-        '• отписался рано — вышел из канала до истечения срока удержания, не оплачивается'
-    )
-  );
+  bot.command('help', (ctx) => {
+    if (ctx.chat.type !== 'private') return;
+    const access = resolveAccess(ctx);
+    if (access.role === 'owner') return ctx.reply(ADMIN_HELP);
+    if (access.role === 'projectOwner') return ctx.reply('Используйте /projects, чтобы посмотреть статистику по вашему проекту.');
+    return ctx.reply(GUEST_MESSAGE);
+  });
 
-  bot.command('projects', ownerOnly(), showProjectsList);
+  bot.command('projects', (ctx) => {
+    if (ctx.chat.type !== 'private') return;
+    const access = resolveAccess(ctx);
+    if (access.role === 'owner') return showProjectsList(ctx);
+    if (access.role === 'projectOwner') return showMyProjects(ctx, access.projects);
+    return ctx.reply(GUEST_MESSAGE);
+  });
 
   bot.action('back', ownerOnly(), async (ctx) => {
     await ctx.deleteMessage().catch(() => {});
@@ -305,38 +386,85 @@ module.exports = (bot) => {
     await ctx.answerCbQuery();
   });
 
-  bot.on('text', ownerOnly(), async (ctx, next) => {
-    const pending = takePending(ctx.from.id);
-    if (!pending) return next();
-    const { action, channelId } = pending;
-    const value = ctx.message.text.trim();
+  bot.action(/^setowner:(.+)$/, ownerOnly(), async (ctx) => {
+    setPending(ctx.from.id, { action: 'setowner', channelId: ctx.match[1] });
+    await ctx.reply(
+      'Кто владелец этого проекта?\n' +
+        'Отправьте его Telegram user ID (число) или @username.\n\n' +
+        'Если указываете @username — привязка произойдёт автоматически, как только этот человек ' +
+        'первый раз напишет что-нибудь боту.'
+    );
+    await ctx.answerCbQuery();
+  });
 
-    if (action === 'setprice') {
-      const price = Number(value.replace(',', '.'));
-      if (!Number.isFinite(price) || price < 0) return ctx.reply('Нужно положительное число. Попробуйте снова через /projects.');
-      db.setPrice(channelId, price);
-      await ctx.reply('Цена обновлена.\n\n' + projectSummaryText(db.getProject(channelId)), projectKeyboard(channelId));
-      return;
+  bot.action('myprojects', async (ctx) => {
+    const access = resolveAccess(ctx);
+    if (access.role !== 'projectOwner') return ctx.answerCbQuery('Нет доступа');
+    await ctx.deleteMessage().catch(() => {});
+    await showMyProjects(ctx, access.projects);
+    await ctx.answerCbQuery();
+  });
+
+  bot.action(/^myproj:(-?\d+)$/, (ctx) => {
+    const access = resolveAccess(ctx);
+    return showMyPeriodMenu(ctx, ctx.match[1], access.projects.length > 1);
+  });
+
+  bot.action(/^mystats:(-?\d+):([a-z0-9]+)$/, (ctx) => showMyPeriodStats(ctx, ctx.match[1], ctx.match[2]));
+
+  bot.on('text', async (ctx, next) => {
+    if (ctx.chat.type !== 'private') return;
+
+    if (isOwner(ctx.from.id)) {
+      const pending = takePending(ctx.from.id);
+      if (!pending) return next();
+      const { action, channelId } = pending;
+      const value = ctx.message.text.trim();
+
+      if (action === 'setprice') {
+        const price = Number(value.replace(',', '.'));
+        if (!Number.isFinite(price) || price < 0) return ctx.reply('Нужно положительное число. Попробуйте снова через /projects.');
+        db.setPrice(channelId, price);
+        await ctx.reply('Цена обновлена.\n\n' + projectSummaryText(db.getProject(channelId)), projectKeyboard(channelId));
+        return;
+      }
+
+      if (action === 'setcur') {
+        db.setCurrency(channelId, value.toUpperCase().slice(0, 10));
+        await ctx.reply('Валюта обновлена.\n\n' + projectSummaryText(db.getProject(channelId)), projectKeyboard(channelId));
+        return;
+      }
+
+      if (action === 'sethold') {
+        const days = parseInt(value, 10);
+        if (!Number.isInteger(days) || days < 0) return ctx.reply('Нужно целое число дней.');
+        db.setHoldDays(channelId, days);
+        await ctx.reply('Срок удержания обновлён.\n\n' + projectSummaryText(db.getProject(channelId)), projectKeyboard(channelId));
+        return;
+      }
+
+      if (action === 'newlink') {
+        return createTrackingLink(ctx, channelId, value);
+      }
+
+      if (action === 'setowner') {
+        const raw = value.trim().replace(/^@/, '');
+        if (/^\d+$/.test(raw)) {
+          db.setProjectOwnerId(channelId, raw);
+        } else if (raw.length > 0) {
+          db.setProjectOwnerUsername(channelId, raw);
+        } else {
+          return ctx.reply('Не понял ввод. Пришлите числовой ID или @username.');
+        }
+        await ctx.reply('Владелец обновлён.\n\n' + projectSummaryText(db.getProject(channelId)), projectKeyboard(channelId));
+        return;
+      }
+
+      return next();
     }
 
-    if (action === 'setcur') {
-      db.setCurrency(channelId, value.toUpperCase().slice(0, 10));
-      await ctx.reply('Валюта обновлена.\n\n' + projectSummaryText(db.getProject(channelId)), projectKeyboard(channelId));
-      return;
-    }
-
-    if (action === 'sethold') {
-      const days = parseInt(value, 10);
-      if (!Number.isInteger(days) || days < 0) return ctx.reply('Нужно целое число дней.');
-      db.setHoldDays(channelId, days);
-      await ctx.reply('Срок удержания обновлён.\n\n' + projectSummaryText(db.getProject(channelId)), projectKeyboard(channelId));
-      return;
-    }
-
-    if (action === 'newlink') {
-      return createTrackingLink(ctx, channelId, value);
-    }
-
-    return next();
+    const access = resolveAccess(ctx);
+    if (access.role === 'projectOwner') return showMyProjects(ctx, access.projects);
+    return ctx.reply(GUEST_MESSAGE);
   });
 };
