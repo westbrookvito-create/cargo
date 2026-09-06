@@ -13,4 +13,7 @@ module.exports = {
   defaultCurrency: process.env.DEFAULT_CURRENCY || 'USD',
   botDisplayName: process.env.BOT_DISPLAY_NAME || 'Cherokky Traff',
   guestContact: process.env.GUEST_CONTACT || '@saintsoon',
+  // http(s):// or socks5:// proxy URL, for networks where api.telegram.org
+  // is blocked or throttled directly (e.g. some ISPs).
+  proxyUrl: process.env.BOT_PROXY_URL || '',
 };

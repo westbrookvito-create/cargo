@@ -10,7 +10,20 @@ if (config.ownerIds.length === 0) {
   process.exit(1);
 }
 
-const bot = new Telegraf(config.botToken);
+function buildProxyAgent(proxyUrl) {
+  if (!proxyUrl) return undefined;
+  if (proxyUrl.startsWith('socks')) {
+    const { SocksProxyAgent } = require('socks-proxy-agent');
+    return new SocksProxyAgent(proxyUrl);
+  }
+  const { HttpsProxyAgent } = require('https-proxy-agent');
+  return new HttpsProxyAgent(proxyUrl);
+}
+
+const agent = buildProxyAgent(config.proxyUrl);
+if (agent) console.log('Using proxy for Telegram API requests.');
+
+const bot = new Telegraf(config.botToken, agent ? { telegram: { agent } } : undefined);
 
 require('./handlers/myChatMember')(bot);
 require('./handlers/chatMember')(bot);
