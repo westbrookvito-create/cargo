@@ -239,6 +239,45 @@ function exportRows(channelId) {
     .all(channelId);
 }
 
+function getAllProjectsPeriodStats(from, to) {
+  const projects = listProjects();
+  const stmt = db.prepare(
+    `SELECT
+       SUM(CASE WHEN joined_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS newSubs,
+       SUM(CASE WHEN status = 'confirmed' AND confirmed_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS confirmed,
+       SUM(CASE WHEN status = 'left_early' AND left_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS leftEarly
+     FROM subscribers WHERE channel_id = ?`
+  );
+
+  const results = projects.map((project) => {
+    const row = stmt.get(from, to, from, to, from, to, project.channel_id);
+    const newSubs = row.newSubs || 0;
+    const confirmed = row.confirmed || 0;
+    const leftEarly = row.leftEarly || 0;
+    return { project, newSubs, confirmed, leftEarly, earnings: confirmed * project.price_per_sub };
+  });
+
+  const totalsByCurrency = {};
+  for (const r of results) {
+    totalsByCurrency[r.project.currency] = (totalsByCurrency[r.project.currency] || 0) + r.earnings;
+  }
+
+  return { results, totalsByCurrency };
+}
+
+function exportAllRows() {
+  return db
+    .prepare(
+      `SELECT p.title AS project_title, s.channel_id, s.user_id, il.label AS label,
+              s.joined_at, s.left_at, s.status, s.confirmed_at
+       FROM subscribers s
+       JOIN projects p ON p.channel_id = s.channel_id
+       LEFT JOIN invite_links il ON il.id = s.invite_link_id
+       ORDER BY p.title, s.joined_at DESC`
+    )
+    .all();
+}
+
 module.exports = {
   db,
   upsertProjectFromChat,
@@ -256,4 +295,6 @@ module.exports = {
   confirmDueSubscribers,
   getPeriodStats,
   exportRows,
+  getAllProjectsPeriodStats,
+  exportAllRows,
 };

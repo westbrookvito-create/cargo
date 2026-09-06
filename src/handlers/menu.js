@@ -2,19 +2,40 @@ const { Markup } = require('telegraf');
 const db = require('../db');
 const { ownerOnly } = require('../auth');
 const { setPending, takePending } = require('../state');
-const { buildCsv } = require('../services/csv');
+const { buildCsv, buildAllCsv } = require('../services/csv');
 const { getPeriod, listPeriods } = require('../services/periods');
 
 function money(amount, currency) {
   return `${Number(amount).toFixed(2)} ${currency}`;
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function truncate(s, len) {
+  s = String(s);
+  return s.length > len ? `${s.slice(0, len - 1)}…` : s;
+}
+
+function padEnd(s, len) {
+  s = String(s);
+  return s.length >= len ? s : s + ' '.repeat(len - s.length);
+}
+
+function padStart(s, len) {
+  s = String(s);
+  return s.length >= len ? s : ' '.repeat(len - s.length) + s;
+}
+
 function projectsKeyboard() {
   const projects = db.listProjects();
   if (projects.length === 0) return null;
-  const rows = projects.map((p) => [
-    Markup.button.callback(`${p.title}`, `proj:${p.channel_id}`),
-  ]);
+  const rows = [
+    [Markup.button.callback('📈 Сводка по всем проектам', 'allperiods')],
+    [Markup.button.callback('⬇️ Экспорт всех (CSV)', 'exportall')],
+    ...projects.map((p) => [Markup.button.callback(`${p.title}`, `proj:${p.channel_id}`)]),
+  ];
   return Markup.inlineKeyboard(rows);
 }
 
@@ -114,6 +135,82 @@ async function showPeriodStats(ctx, channelId, periodKey) {
   await ctx.answerCbQuery();
 }
 
+function allPeriodKeyboard() {
+  const periods = listPeriods();
+  const rows = [];
+  for (let i = 0; i < periods.length; i += 2) {
+    rows.push(periods.slice(i, i + 2).map((p) => Markup.button.callback(p.label, `allpstats:${p.key}`)));
+  }
+  rows.push([Markup.button.callback('« Назад', 'back')]);
+  return Markup.inlineKeyboard(rows);
+}
+
+async function showAllPeriodMenu(ctx) {
+  const text = '📈 Сводка по всем проектам\nВыберите период:';
+  await ctx
+    .editMessageText(text, allPeriodKeyboard())
+    .catch(() => ctx.reply(text, allPeriodKeyboard()));
+  await ctx.answerCbQuery();
+}
+
+function buildSummaryTable(results) {
+  const NAME_W = 14;
+  const NUM_W = 5;
+  const EARN_W = 13;
+  const header =
+    padEnd('Проект', NAME_W) + padStart('Нов', NUM_W) + padStart('Подтв', NUM_W) + padStart('Ушли', NUM_W) + padStart('Заработано', EARN_W);
+  const lines = [header, '-'.repeat(header.length)];
+  for (const r of results) {
+    lines.push(
+      padEnd(truncate(r.project.title, NAME_W - 1), NAME_W) +
+        padStart(r.newSubs, NUM_W) +
+        padStart(r.confirmed, NUM_W) +
+        padStart(r.leftEarly, NUM_W) +
+        padStart(`${r.earnings.toFixed(2)} ${r.project.currency}`, EARN_W)
+    );
+  }
+  return lines.join('\n');
+}
+
+async function showAllPeriodStats(ctx, periodKey) {
+  const period = getPeriod(periodKey);
+  if (!period) return ctx.answerCbQuery('Неизвестный период');
+  const [from, to] = period.range();
+  const { results, totalsByCurrency } = db.getAllProjectsPeriodStats(from, to);
+
+  if (results.length === 0) {
+    await ctx.reply('Пока нет ни одного проекта.');
+    return ctx.answerCbQuery();
+  }
+
+  const totalNew = results.reduce((s, r) => s + r.newSubs, 0);
+  const totalConfirmed = results.reduce((s, r) => s + r.confirmed, 0);
+  const totalLeft = results.reduce((s, r) => s + r.leftEarly, 0);
+
+  let text = `📈 Сводка по всем проектам — ${period.label}\n\n<pre>${escapeHtml(buildSummaryTable(results))}</pre>\n\n`;
+  text += `Всего: новых ${totalNew}, подтверждено ${totalConfirmed}, отписалось рано ${totalLeft}\n`;
+  text += '💰 Заработано по валютам:\n';
+  for (const [currency, amount] of Object.entries(totalsByCurrency)) {
+    text += `  ${amount.toFixed(2)} ${currency}\n`;
+  }
+
+  await ctx.reply(text, {
+    parse_mode: 'HTML',
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('« Другой период', 'allperiods')],
+      [Markup.button.callback('« К проектам', 'back')],
+    ]),
+  });
+  await ctx.answerCbQuery();
+}
+
+async function exportAllCsv(ctx) {
+  const rows = db.exportAllRows();
+  const csv = buildAllCsv(rows);
+  await ctx.replyWithDocument({ source: Buffer.from(csv, 'utf8'), filename: 'all_projects_subscribers.csv' });
+  await ctx.answerCbQuery();
+}
+
 async function createTrackingLink(ctx, channelId, label) {
   const project = db.getProject(channelId);
   if (!project) return ctx.reply('Проект не найден.');
@@ -179,6 +276,10 @@ module.exports = (bot) => {
   bot.action(/^periods:(.+)$/, ownerOnly(), (ctx) => showPeriodMenu(ctx, ctx.match[1]));
   bot.action(/^pstats:(-?\d+):([a-z0-9]+)$/, ownerOnly(), (ctx) => showPeriodStats(ctx, ctx.match[1], ctx.match[2]));
   bot.action(/^export:(.+)$/, ownerOnly(), (ctx) => exportCsv(ctx, ctx.match[1]));
+
+  bot.action('allperiods', ownerOnly(), showAllPeriodMenu);
+  bot.action(/^allpstats:([a-z0-9]+)$/, ownerOnly(), (ctx) => showAllPeriodStats(ctx, ctx.match[1]));
+  bot.action('exportall', ownerOnly(), exportAllCsv);
 
   bot.action(/^setprice:(.+)$/, ownerOnly(), async (ctx) => {
     setPending(ctx.from.id, { action: 'setprice', channelId: ctx.match[1] });

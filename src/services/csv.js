@@ -27,4 +27,23 @@ function buildCsv(rows) {
   return lines.join('\n');
 }
 
-module.exports = { buildCsv };
+function buildAllCsv(rows) {
+  const header = ['project', 'user_id', 'source', 'joined_at', 'left_at', 'status', 'confirmed_at'];
+  const lines = [header.join(',')];
+  for (const r of rows) {
+    lines.push(
+      [
+        csvEscape(r.project_title),
+        csvEscape(r.user_id),
+        csvEscape(r.label || 'direct'),
+        csvEscape(toIso(r.joined_at)),
+        csvEscape(toIso(r.left_at)),
+        csvEscape(r.status),
+        csvEscape(toIso(r.confirmed_at)),
+      ].join(',')
+    );
+  }
+  return lines.join('\n');
+}
+
+module.exports = { buildCsv, buildAllCsv };
