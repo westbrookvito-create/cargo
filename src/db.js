@@ -163,49 +163,68 @@ function confirmDueSubscribers() {
   return due.length;
 }
 
-function getStats(channelId) {
+function getPeriodStats(channelId, from, to) {
   const project = getProject(channelId);
   if (!project) return null;
-  const rows = db
+
+  const newRows = db
     .prepare(
-      `SELECT
-         il.id AS link_id,
-         il.label AS label,
-         SUM(CASE WHEN s.status = 'pending' THEN 1 ELSE 0 END) AS pending,
-         SUM(CASE WHEN s.status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
-         SUM(CASE WHEN s.status = 'left_early' THEN 1 ELSE 0 END) AS left_early
+      `SELECT il.id AS link_id, il.label AS label, COUNT(*) AS cnt
        FROM subscribers s
        LEFT JOIN invite_links il ON il.id = s.invite_link_id
-       WHERE s.channel_id = ?
-       GROUP BY il.id
-       ORDER BY confirmed DESC`
+       WHERE s.channel_id = ? AND s.joined_at BETWEEN ? AND ?
+       GROUP BY il.id`
     )
-    .all(channelId);
+    .all(channelId, from, to);
 
-  const totals = rows.reduce(
-    (acc, r) => {
-      acc.pending += r.pending;
-      acc.confirmed += r.confirmed;
-      acc.left_early += r.left_early;
+  const confirmedRows = db
+    .prepare(
+      `SELECT il.id AS link_id, il.label AS label, COUNT(*) AS cnt
+       FROM subscribers s
+       LEFT JOIN invite_links il ON il.id = s.invite_link_id
+       WHERE s.channel_id = ? AND s.status = 'confirmed' AND s.confirmed_at BETWEEN ? AND ?
+       GROUP BY il.id`
+    )
+    .all(channelId, from, to);
+
+  const leftRows = db
+    .prepare(
+      `SELECT il.id AS link_id, il.label AS label, COUNT(*) AS cnt
+       FROM subscribers s
+       LEFT JOIN invite_links il ON il.id = s.invite_link_id
+       WHERE s.channel_id = ? AND s.status = 'left_early' AND s.left_at BETWEEN ? AND ?
+       GROUP BY il.id`
+    )
+    .all(channelId, from, to);
+
+  const byLink = new Map();
+  const ensure = (linkId, label) => {
+    const key = linkId === null ? 'null' : linkId;
+    if (!byLink.has(key)) {
+      byLink.set(key, { label: label || 'Без метки / прямая ссылка', newSubs: 0, confirmed: 0, leftEarly: 0 });
+    }
+    return byLink.get(key);
+  };
+  for (const r of newRows) ensure(r.link_id, r.label).newSubs = r.cnt;
+  for (const r of confirmedRows) ensure(r.link_id, r.label).confirmed = r.cnt;
+  for (const r of leftRows) ensure(r.link_id, r.label).leftEarly = r.cnt;
+
+  const sources = [...byLink.values()]
+    .map((s) => ({ ...s, earnings: s.confirmed * project.price_per_sub }))
+    .sort((a, b) => b.confirmed - a.confirmed || b.newSubs - a.newSubs);
+
+  const totals = sources.reduce(
+    (acc, s) => {
+      acc.newSubs += s.newSubs;
+      acc.confirmed += s.confirmed;
+      acc.leftEarly += s.leftEarly;
+      acc.earnings += s.earnings;
       return acc;
     },
-    { pending: 0, confirmed: 0, left_early: 0 }
+    { newSubs: 0, confirmed: 0, leftEarly: 0, earnings: 0 }
   );
 
-  return {
-    project,
-    sources: rows.map((r) => ({
-      label: r.label || 'Без метки / прямая ссылка',
-      pending: r.pending,
-      confirmed: r.confirmed,
-      leftEarly: r.left_early,
-      earnings: r.confirmed * project.price_per_sub,
-    })),
-    totals: {
-      ...totals,
-      earnings: totals.confirmed * project.price_per_sub,
-    },
-  };
+  return { project, sources, totals };
 }
 
 function exportRows(channelId) {
@@ -235,6 +254,6 @@ module.exports = {
   recordJoin,
   recordLeave,
   confirmDueSubscribers,
-  getStats,
+  getPeriodStats,
   exportRows,
 };

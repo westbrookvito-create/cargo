@@ -3,6 +3,7 @@ const db = require('../db');
 const { ownerOnly } = require('../auth');
 const { setPending, takePending } = require('../state');
 const { buildCsv } = require('../services/csv');
+const { getPeriod, listPeriods } = require('../services/periods');
 
 function money(amount, currency) {
   return `${Number(amount).toFixed(2)} ${currency}`;
@@ -19,7 +20,7 @@ function projectsKeyboard() {
 
 function projectKeyboard(channelId) {
   return Markup.inlineKeyboard([
-    [Markup.button.callback('📊 Статистика', `stats:${channelId}`)],
+    [Markup.button.callback('📊 Статистика', `periods:${channelId}`)],
     [Markup.button.callback('🔗 Новая трек-ссылка', `newlink:${channelId}`)],
     [Markup.button.callback('💰 Цена за подписчика', `setprice:${channelId}`)],
     [Markup.button.callback('💱 Валюта', `setcur:${channelId}`)],
@@ -27,6 +28,20 @@ function projectKeyboard(channelId) {
     [Markup.button.callback('⬇️ Экспорт CSV', `export:${channelId}`)],
     [Markup.button.callback('« Назад к проектам', 'back')],
   ]);
+}
+
+function periodKeyboard(channelId) {
+  const periods = listPeriods();
+  const rows = [];
+  for (let i = 0; i < periods.length; i += 2) {
+    rows.push(
+      periods
+        .slice(i, i + 2)
+        .map((p) => Markup.button.callback(p.label, `pstats:${channelId}:${p.key}`))
+    );
+  }
+  rows.push([Markup.button.callback('« К проекту', `proj:${channelId}`)]);
+  return Markup.inlineKeyboard(rows);
 }
 
 async function showProjectsList(ctx) {
@@ -56,27 +71,46 @@ async function showProjectMenu(ctx, channelId) {
   await ctx.editMessageText(text, projectKeyboard(channelId)).catch(() => ctx.reply(text, projectKeyboard(channelId)));
 }
 
-async function showStats(ctx, channelId) {
-  const stats = db.getStats(channelId);
+async function showPeriodMenu(ctx, channelId) {
+  const project = db.getProject(channelId);
+  if (!project) return ctx.answerCbQuery('Проект не найден');
+  const text = `📊 ${project.title}\nВыберите период:`;
+  await ctx
+    .editMessageText(text, periodKeyboard(channelId))
+    .catch(() => ctx.reply(text, periodKeyboard(channelId)));
+  await ctx.answerCbQuery();
+}
+
+async function showPeriodStats(ctx, channelId, periodKey) {
+  const period = getPeriod(periodKey);
+  if (!period) return ctx.answerCbQuery('Неизвестный период');
+  const [from, to] = period.range();
+  const stats = db.getPeriodStats(channelId, from, to);
   if (!stats) return ctx.answerCbQuery('Проект не найден');
   const { project, sources, totals } = stats;
 
-  let text = `📊 Статистика: ${project.title}\n\n`;
+  let text = `📊 ${project.title} — ${period.label}\n\n`;
   if (sources.length === 0) {
-    text += 'Пока нет ни одного подписчика.';
+    text += 'Нет данных за этот период.';
   } else {
     for (const s of sources) {
       text +=
         `• ${s.label}\n` +
-        `  подтверждено: ${s.confirmed} | в ожидании: ${s.pending} | отписались рано: ${s.leftEarly}\n` +
-        `  начислено: ${money(s.earnings, project.currency)}\n`;
+        `  новых: ${s.newSubs} | подтверждено: ${s.confirmed} | отписалось рано: ${s.leftEarly}\n` +
+        `  заработано: ${money(s.earnings, project.currency)}\n`;
     }
     text +=
-      `\nИТОГО: подтверждено ${totals.confirmed}, в ожидании ${totals.pending}, отписались рано ${totals.leftEarly}\n` +
-      `К оплате: ${money(totals.earnings, project.currency)}`;
+      `\nИТОГО за «${period.label}»: новых ${totals.newSubs}, подтверждено ${totals.confirmed}, отписалось рано ${totals.leftEarly}\n` +
+      `💰 Заработано: ${money(totals.earnings, project.currency)}`;
   }
 
-  await ctx.reply(text, Markup.inlineKeyboard([[Markup.button.callback('« Назад', `proj:${channelId}`)]]));
+  await ctx.reply(
+    text,
+    Markup.inlineKeyboard([
+      [Markup.button.callback('« Другой период', `periods:${channelId}`)],
+      [Markup.button.callback('« К проекту', `proj:${channelId}`)],
+    ])
+  );
   await ctx.answerCbQuery();
 }
 
@@ -142,7 +176,8 @@ module.exports = (bot) => {
   });
 
   bot.action(/^proj:(.+)$/, ownerOnly(), (ctx) => showProjectMenu(ctx, ctx.match[1]));
-  bot.action(/^stats:(.+)$/, ownerOnly(), (ctx) => showStats(ctx, ctx.match[1]));
+  bot.action(/^periods:(.+)$/, ownerOnly(), (ctx) => showPeriodMenu(ctx, ctx.match[1]));
+  bot.action(/^pstats:(-?\d+):([a-z0-9]+)$/, ownerOnly(), (ctx) => showPeriodStats(ctx, ctx.match[1], ctx.match[2]));
   bot.action(/^export:(.+)$/, ownerOnly(), (ctx) => exportCsv(ctx, ctx.match[1]));
 
   bot.action(/^setprice:(.+)$/, ownerOnly(), async (ctx) => {
