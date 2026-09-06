@@ -1,27 +1,9 @@
 services:
-  server:
-    build:
-      context: ./apps/server
+  bot:
+    build: .
     restart: unless-stopped
-    env_file:
-      - ./apps/server/.env
+    env_file: .env
     environment:
-      DATABASE_URL: file:/data/prod.db
+      - DB_PATH=/app/data/bot.db
     volumes:
-      - server-data:/data
-    ports:
-      - "8080:8080"
-
-  webapp:
-    build:
-      context: ./apps/webapp
-      args:
-        VITE_API_BASE_URL: ${WEBAPP_API_BASE_URL:-https://api.your-domain.example.com}
-    restart: unless-stopped
-    ports:
-      - "8081:80"
-    depends_on:
-      - server
-
-volumes:
-  server-data:
+      - ./data:/app/data
