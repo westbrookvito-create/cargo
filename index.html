@@ -190,6 +190,18 @@
   a.btn svg { width: 19px; height: 19px; flex-shrink: 0; position: relative; }
   a.btn span { position: relative; }
 
+  .vpn-hint {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-3);
+  }
+  .vpn-hint svg { width: 13px; height: 13px; flex-shrink: 0; }
+
   /* ---- description ---- */
   .desc {
     margin-top: 26px;
@@ -271,6 +283,11 @@
         <span>Вступить</span>
       </a>
     </div>
+
+    <p class="vpn-hint">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5.5c0 4.5-3 7.5-7 9.5-4-2-7-5-7-9.5V6l7-3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      Включите VPN, чтобы подключиться
+    </p>
 
     <p class="desc" id="channel-tagline">Гайды на адалт, чатинг, скаутинг и операторов стримов.</p>
     <p class="handle-tag" id="channel-handle">@madaltov</p>
