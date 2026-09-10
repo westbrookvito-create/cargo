@@ -15,8 +15,6 @@
     --bg-0: #0a0605;
     --bg-1: #170a0a;
     --curtain: #3a0f11;
-    --accent: #d1454b;
-    --accent-soft: rgba(209, 69, 75, 0.38);
     --text: #f5ece1;
     --text-2: #c9b8a8;
     --text-3: #8f8177;
@@ -60,15 +58,15 @@
       linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 46%, #05030300 100%);
   }
 
-  /* darken overlay, as requested — a touch heavier once a real photo is set */
+  /* darken overlay — near-black once a real photo is set */
   .backdrop::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: rgba(3, 2, 1, 0.38);
+    background: rgba(2, 1, 1, 0.5);
   }
   body.has-photo .backdrop::after {
-    background: rgba(3, 2, 1, 0.52);
+    background: rgba(0, 0, 0, 0.95);
   }
 
   /* subtle film grain for texture */
@@ -102,8 +100,8 @@
     height: 108px;
     border-radius: 50%;
     padding: 3px;
-    background: conic-gradient(from 180deg, var(--accent), rgba(209,69,75,0.15), var(--accent));
-    box-shadow: 0 0 44px -6px var(--accent-soft);
+    background: conic-gradient(from 180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.12), rgba(255,255,255,0.85));
+    box-shadow: 0 0 40px -6px rgba(255,255,255,0.22);
   }
 
   .avatar {
@@ -131,17 +129,18 @@
 
   .btn-glow {
     position: absolute;
-    inset: -14px;
-    border-radius: 26px;
-    background: radial-gradient(closest-side, var(--accent-soft), transparent 75%);
-    filter: blur(6px);
-    animation: breathe 2.6s ease-in-out infinite;
+    inset: -20px;
+    border-radius: 30px;
+    background:
+      radial-gradient(closest-side, rgba(255,255,255,0.55), transparent 70%);
+    filter: blur(10px);
+    animation: breathe 2.4s ease-in-out infinite;
     pointer-events: none;
   }
 
   @keyframes breathe {
-    0%, 100% { opacity: 0.55; transform: scale(0.96); }
-    50% { opacity: 1; transform: scale(1.04); }
+    0%, 100% { opacity: 0.5; transform: scale(0.94); }
+    50% { opacity: 1; transform: scale(1.06); }
   }
 
   a.btn {
@@ -160,8 +159,14 @@
     padding: 18px 22px;
     border-radius: 16px;
     overflow: hidden;
-    box-shadow: 0 18px 40px -14px var(--accent-soft), 0 0 0 1px rgba(255,255,255,0.06);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+    animation: btn-shine 2.4s ease-in-out infinite;
     transition: transform 0.15s ease;
+  }
+
+  @keyframes btn-shine {
+    0%, 100% { box-shadow: 0 16px 34px -12px rgba(255,255,255,0.30), 0 0 0 1px rgba(255,255,255,0.08); }
+    50% { box-shadow: 0 20px 48px -10px rgba(255,255,255,0.55), 0 0 0 1px rgba(255,255,255,0.14); }
   }
 
   a.btn:active { transform: scale(0.96); }
@@ -196,6 +201,14 @@
     max-width: 28ch;
   }
 
+  .handle-tag {
+    margin-top: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-2);
+    letter-spacing: 0.01em;
+  }
+
   /* ---- quiet auto-redirect status ---- */
   .redirect-status {
     margin-top: 22px;
@@ -211,7 +224,7 @@
     width: 13px;
     height: 13px;
     border-radius: 50%;
-    background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), rgba(245,236,225,0.15) 0);
+    background: conic-gradient(#ffffff calc(var(--p, 0) * 1%), rgba(245,236,225,0.15) 0);
     flex-shrink: 0;
     transition: background 0.2s linear;
   }
@@ -229,7 +242,7 @@
     border: none;
     padding: 0;
     font: inherit;
-    color: var(--accent);
+    color: var(--text);
     font-weight: 700;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -237,7 +250,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .btn-glow, a.btn::before { animation: none; }
+    .btn-glow, a.btn, a.btn::before { animation: none; }
   }
 </style>
 </head>
@@ -260,6 +273,7 @@
     </div>
 
     <p class="desc" id="channel-tagline">Гайды на адалт, чатинг, скаутинг и операторов стримов.</p>
+    <p class="handle-tag" id="channel-handle">@madaltov</p>
 
     <p class="redirect-status" id="redirect-status">
       <span class="ring" id="redirect-ring"></span>
@@ -270,7 +284,8 @@
 
   <script>
     // ── Настройки: замените на свои значения ──────────────────────────────
-    const CHANNEL_URL = "https://t.me/your_channel";
+    const CHANNEL_HANDLE = "@madaltov";
+    const CHANNEL_URL = "https://t.me/madaltov";
     const CHANNEL_TAGLINE = "Гайды на адалт, чатинг, скаутинг и операторов стримов.";
     const AVATAR_URL = "avatar.jpg"; // файл рядом с index.html — фото с бокалами
     const BG_IMAGE_URL = "background.jpg"; // файл рядом с index.html — фото с красным занавесом
@@ -278,8 +293,9 @@
     // ────────────────────────────────────────────────────────────────────
 
     document.getElementById("channel-tagline").textContent = CHANNEL_TAGLINE;
+    document.getElementById("channel-handle").textContent = CHANNEL_HANDLE;
     document.getElementById("open-btn").href = CHANNEL_URL;
-    document.title = "Telegram";
+    document.title = CHANNEL_HANDLE + " — Telegram";
 
     // если файла ещё нет рядом с index.html — просто остаётся плейсхолдер-иконка
     if (AVATAR_URL) {
