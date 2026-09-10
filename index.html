@@ -272,8 +272,8 @@
     // ── Настройки: замените на свои значения ──────────────────────────────
     const CHANNEL_URL = "https://t.me/your_channel";
     const CHANNEL_TAGLINE = "Гайды на адалт, чатинг, скаутинг и операторов стримов.";
-    const AVATAR_URL = ""; // вставьте ссылку/путь к картинке, когда пришлёте её — например "avatar.jpg"
-    const BG_IMAGE_URL = ""; // вставьте ссылку/путь к фоновой фотографии — например "background.jpg"
+    const AVATAR_URL = "avatar.jpg"; // файл рядом с index.html — фото с бокалами
+    const BG_IMAGE_URL = "background.jpg"; // файл рядом с index.html — фото с красным занавесом
     const AUTO_REDIRECT_SECONDS = 4; // 0 — отключить автопереход
     // ────────────────────────────────────────────────────────────────────
 
@@ -281,15 +281,24 @@
     document.getElementById("open-btn").href = CHANNEL_URL;
     document.title = "Telegram";
 
+    // если файла ещё нет рядом с index.html — просто остаётся плейсхолдер-иконка
     if (AVATAR_URL) {
       const avatarEl = document.getElementById("avatar");
-      avatarEl.innerHTML = `<img src="${AVATAR_URL}" alt="" />`;
+      const img = new Image();
+      img.alt = "";
+      img.onload = () => { avatarEl.replaceChildren(img); };
+      img.src = AVATAR_URL;
     }
 
+    // если файла ещё нет рядом с index.html — остаётся градиентный фон
     if (BG_IMAGE_URL) {
-      const backdropEl = document.querySelector(".backdrop");
-      backdropEl.style.backgroundImage = `url("${BG_IMAGE_URL}"), ${getComputedStyle(backdropEl).backgroundImage}`;
-      document.body.classList.add("has-photo");
+      const probe = new Image();
+      probe.onload = () => {
+        const backdropEl = document.querySelector(".backdrop");
+        backdropEl.style.backgroundImage = `url("${BG_IMAGE_URL}"), ${getComputedStyle(backdropEl).backgroundImage}`;
+        document.body.classList.add("has-photo");
+      };
+      probe.src = BG_IMAGE_URL;
     }
 
     const statusEl = document.getElementById("redirect-status");
