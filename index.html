@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0a0605" />
 <title>Канал — Telegram</title>
 <meta name="description" content="Переход в наш Telegram-канал." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23f0a955'/%3E%3Cpath d='M17.6 7.2 15.9 16c-.13.6-.5.74-1 .46l-2.77-2.04-1.34 1.29c-.15.15-.27.27-.56.27l.2-2.83 5.15-4.65c.22-.2-.05-.31-.35-.11l-6.36 4-2.74-.86c-.6-.19-.6-.6.12-.88l10.7-4.12c.5-.18.94.12.77.89Z' fill='%23100b09'/%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23d1454b'/%3E%3Cpath d='M17.6 7.2 15.9 16c-.13.6-.5.74-1 .46l-2.77-2.04-1.34 1.29c-.15.15-.27.27-.56.27l.2-2.83 5.15-4.65c.22-.2-.05-.31-.35-.11l-6.36 4-2.74-.86c-.6-.19-.6-.6.12-.88l10.7-4.12c.5-.18.94.12.77.89Z' fill='%23fdf3ef'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -15,8 +15,8 @@
     --bg-0: #0a0605;
     --bg-1: #170a0a;
     --curtain: #3a0f11;
-    --amber: #f0a955;
-    --amber-soft: rgba(240, 169, 85, 0.35);
+    --accent: #d1454b;
+    --accent-soft: rgba(209, 69, 75, 0.38);
     --text: #f5ece1;
     --text-2: #c9b8a8;
     --text-3: #8f8177;
@@ -45,25 +45,30 @@
     isolation: isolate;
   }
 
-  /* ---- moody velvet-lounge backdrop, built from the reference photo's palette ---- */
+  /* ---- backdrop: reference photo when set, moody gradient fallback otherwise ---- */
   .backdrop {
     position: fixed;
     inset: 0;
     z-index: -2;
-    background:
-      radial-gradient(720px 520px at 18% -6%, rgba(240, 169, 85, 0.16), transparent 62%),
-      radial-gradient(640px 480px at 88% 6%, rgba(240, 169, 85, 0.12), transparent 60%),
+    background-size: cover;
+    background-position: center;
+    background-color: var(--bg-0);
+    background-image:
+      radial-gradient(720px 520px at 18% -6%, rgba(209, 69, 75, 0.14), transparent 62%),
+      radial-gradient(640px 480px at 88% 6%, rgba(209, 69, 75, 0.10), transparent 60%),
       radial-gradient(900px 700px at 50% 115%, var(--curtain), transparent 58%),
-      linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 46%, #05030300 100%),
-      var(--bg-0);
+      linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 46%, #05030300 100%);
   }
 
-  /* darken overlay, as requested */
+  /* darken overlay, as requested — a touch heavier once a real photo is set */
   .backdrop::after {
     content: "";
     position: absolute;
     inset: 0;
     background: rgba(3, 2, 1, 0.38);
+  }
+  body.has-photo .backdrop::after {
+    background: rgba(3, 2, 1, 0.52);
   }
 
   /* subtle film grain for texture */
@@ -97,8 +102,8 @@
     height: 108px;
     border-radius: 50%;
     padding: 3px;
-    background: conic-gradient(from 180deg, var(--amber), rgba(240,169,85,0.15), var(--amber));
-    box-shadow: 0 0 44px -6px var(--amber-soft);
+    background: conic-gradient(from 180deg, var(--accent), rgba(209,69,75,0.15), var(--accent));
+    box-shadow: 0 0 44px -6px var(--accent-soft);
   }
 
   .avatar {
@@ -117,17 +122,9 @@
 
   .avatar svg { width: 42px; height: 42px; opacity: 0.55; }
 
-  .handle {
-    margin-top: 16px;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    color: var(--text-3);
-  }
-
   /* ---- CTA button: square, white, glowing, animated ---- */
   .cta {
-    margin-top: 28px;
+    margin-top: 24px;
     width: 100%;
     position: relative;
   }
@@ -136,7 +133,7 @@
     position: absolute;
     inset: -14px;
     border-radius: 26px;
-    background: radial-gradient(closest-side, var(--amber-soft), transparent 75%);
+    background: radial-gradient(closest-side, var(--accent-soft), transparent 75%);
     filter: blur(6px);
     animation: breathe 2.6s ease-in-out infinite;
     pointer-events: none;
@@ -163,7 +160,7 @@
     padding: 18px 22px;
     border-radius: 16px;
     overflow: hidden;
-    box-shadow: 0 18px 40px -14px rgba(240, 169, 85, 0.55), 0 0 0 1px rgba(255,255,255,0.06);
+    box-shadow: 0 18px 40px -14px var(--accent-soft), 0 0 0 1px rgba(255,255,255,0.06);
     transition: transform 0.15s ease;
   }
 
@@ -212,7 +209,7 @@
     width: 13px;
     height: 13px;
     border-radius: 50%;
-    background: conic-gradient(var(--amber) calc(var(--p, 0) * 1%), rgba(245,236,225,0.15) 0);
+    background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), rgba(245,236,225,0.15) 0);
     flex-shrink: 0;
     transition: background 0.2s linear;
   }
@@ -230,7 +227,7 @@
     border: none;
     padding: 0;
     font: inherit;
-    color: var(--amber);
+    color: var(--accent);
     font-weight: 700;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -252,7 +249,6 @@
         <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.6" stroke="var(--text)" stroke-width="1.4"/><path d="M4.8 19c1.2-3.4 4-5 7.2-5s6 1.6 7.2 5" stroke="var(--text)" stroke-width="1.4" stroke-linecap="round"/></svg>
       </div>
     </div>
-    <div class="handle" id="channel-handle">@your_channel</div>
 
     <div class="cta">
       <div class="btn-glow" aria-hidden="true"></div>
@@ -273,20 +269,25 @@
   <script>
     // ── Настройки: замените на свои значения ──────────────────────────────
     const CHANNEL_URL = "https://t.me/your_channel";
-    const CHANNEL_HANDLE = "@your_channel";
     const CHANNEL_TAGLINE = "Гайды на адалт, чатинг, скаутинг и операторов стримов.";
     const AVATAR_URL = ""; // вставьте ссылку/путь к картинке, когда пришлёте её — например "avatar.jpg"
+    const BG_IMAGE_URL = ""; // вставьте ссылку/путь к фоновой фотографии — например "background.jpg"
     const AUTO_REDIRECT_SECONDS = 4; // 0 — отключить автопереход
     // ────────────────────────────────────────────────────────────────────
 
-    document.getElementById("channel-handle").textContent = CHANNEL_HANDLE;
     document.getElementById("channel-tagline").textContent = CHANNEL_TAGLINE;
     document.getElementById("open-btn").href = CHANNEL_URL;
-    document.title = CHANNEL_HANDLE + " — Telegram";
+    document.title = "Telegram";
 
     if (AVATAR_URL) {
       const avatarEl = document.getElementById("avatar");
-      avatarEl.innerHTML = `<img src="${AVATAR_URL}" alt="${CHANNEL_HANDLE}" />`;
+      avatarEl.innerHTML = `<img src="${AVATAR_URL}" alt="" />`;
+    }
+
+    if (BG_IMAGE_URL) {
+      const backdropEl = document.querySelector(".backdrop");
+      backdropEl.style.backgroundImage = `url("${BG_IMAGE_URL}"), ${getComputedStyle(backdropEl).backgroundImage}`;
+      document.body.classList.add("has-photo");
     }
 
     const statusEl = document.getElementById("redirect-status");
